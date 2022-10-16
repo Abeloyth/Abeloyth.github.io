@@ -1,550 +1,354 @@
-(function ($) {
-    /**
-     * User options
-     */
-    var defaults = {
-        delay: 200 //Game speed
-    };
-
-    $.fn.init2048 = function (_options) {
-        var _this = this,
-            options = $.extend(defaults, _options),
-
-            dir = {
-                up: 'up',
-                right: 'right',
-                down: 'down',
-                left: 'left'
-            },
-
-            holder = {}, //Game outer holder
-            content = {}, //Game inner container
-
-            matrix = [], //For the logic behind
-            boxes = [], //Boxes storage
-
-            isCheating = 0,
-            isGameOver = false;
-
-        resetGame();
-        bind();
-
-        /**
-         * Restart the game by recreate all DOM elements.
-         */
-        function resetGame() {
-            //Reset the props
-            boxes = [];
-            matrix = [];
-            isCheating = 0;
-            isGameOver = false;
-            //Recreate DOM elements
-            holder = $('<div>').addClass('holder2048');
-            content = $('<div>').addClass('container').appendTo(holder);
-            for (var i = 0; i < 4; i++) {
-                for (var j = 0; j < 4; j++) {
-                    //Reset matrix
-                    matrix[i * 4 + j] = {
-                        top: i * 70,
-                        left: j * 70,
-                        taken: false,
-                        combined: false,
-                        value: 0
-                    };
-                    //This is for the borders of each cell.
-                    $('<div>').addClass('mask').css({
-                        left: j * 70 + "px",
-                        top: i * 70 + "px"
-                    }).appendTo(content);
-                }
-            }
-            //Create the first box on board
-            createBox();
-            //Insert game holder and anything to whoever calls this function
-            _this.html(holder);
+var EventUtil = {
+    //添加事件
+    addHandler: function (element, type, handler) {
+        if (element.addEventListener) {
+            element.addEventListener(type, handler, false);
+        } else if (element.attachEvent) {
+            element.attachEvent("on" + type, handler);
+        } else {
+            element["on" + type] = handler;
         }
-
-        /**
-         * Just for fun.
-         * Reset the game and place a 4096 box on the board.
-         */
-        function cheat() {
-            resetGame();
-            createBox(4096);
-        }
-
-        /**
-         * Create a box and add to game
-         * Takes 1 or 0 param.
-         *
-         * @param value
-         */
-        function createBox(value) {
-            //Check if there are spaces for a new box or not
-            var emptyMatrix = 0;
-            for (var i = 0; i < matrix.length; i++) {
-                if (!matrix[i].taken) {
-                    emptyMatrix++;
-                }
-            }
-            if (emptyMatrix === 0) {
-                return;
-            }
-            //Chose an actual index (means not taken) randomly for the new box
-            var random = Math.floor(Math.random() * emptyMatrix + 1);
-            var chosenIndex = 0;
-            for (var j = 0; chosenIndex < matrix.length; chosenIndex++) {
-                while (matrix[chosenIndex].taken) {
-                    chosenIndex++;
-                }
-                if (++j === random) {
-                    matrix[chosenIndex].taken = true;
-                    break;
-                }
-            }
-            //Do the create job
-            value = value ? value : (Math.floor(Math.random() * 4 + 1) === 4 ? 4 : 2); //Use the value parse in or (1/4 -> 4 or  3/4 -> 2)
-            var newBox = $('<div>').addClass('box').attr({
-                position: chosenIndex,
-                value: value
-            }).css({
-                marginTop: matrix[chosenIndex].top + 2,
-                marginLeft: matrix[chosenIndex].left + 2,
-                opacity: 0
-            }).text(value).appendTo(content).animate({
-                opacity: 1
-            }, options.delay * 2);
-            //Finally push it to the boxes array
-            boxes.push(newBox);
-        }
-
-        /**
-         * Combine 2 boxes into 1
-         * @param source
-         * @param target
-         * @param value
-         */
-        function combineBox(source, target, value) {
-            var _value = parseInt(value) * 2;
-            boxes[target].attr('value', _value).html(_value).css({
-                zIndex: 99
-            }).animate({
-                width: '+=20',
-                height: '+=20',
-                marginTop: '-=10',
-                marginLeft: '-=10'
-            }, options.delay / 2, function () {
-                $(this).animate({
-                    width: '-=20',
-                    height: '-=20',
-                    marginTop: '+=10',
-                    marginLeft: '+=10'
-                }, options.delay / 2, function () {
-                    $(this).css({
-                        zIndex: 1
-                    })
-                })
-            });
-            boxes[source].remove();
-            boxes.splice(source, 1);
-        }
-
-        /**
-         * Check if game over
-         * @returns {boolean}
-         */
-        function gameOver() {
-            if (boxes.length != 16) {
-                return false;
-            }
-            var i, a, b;
-            for (i = 0; i < 16; i++) {
-                for (a = 0; a < 16; a++) {
-                    if (boxes[a].attr('position') == i)
-                        break;
-                }
-                if (i % 4 != 3) {
-                    for (b = 0; b < 16; b++) {
-                        if (boxes[b].attr('position') == i + 1)
-                            break;
-                    }
-                    if (boxes[a].attr('value') == boxes[b].attr('value'))
-                        return false;
-                }
-                if (i < 12) {
-                    for (b = 0; b < 16; b++) {
-                        if (boxes[b].attr('position') == i + 4)
-                            break;
-                    }
-                    if (boxes[a].attr('value') == boxes[b].attr('value'))
-                        return false;
-                }
-            }
-            return true;
-        }
-
-        /**
-         * Game run
-         * @param dir
-         */
-        function gameRun(dir) {
-            if (isGameOver) {
-                return;
-            }
-            if (run(dir)) {
-                createBox();
-            }
-            if (gameOver()) {
-                isGameOver = true;
-                alert("Game Over");
-            }
-        }
-
-        /**
-         * Bind keyboard and screen touch events to game
-         */
-        function bind() {
-            $(window).keydown(function (event) {
-                if (!isGameOver) {
-                    if (event.which == 37) {
-                        event.preventDefault();
-                        gameRun(dir.left);
-                    } else if (event.which == 38) {
-                        event.preventDefault();
-                        gameRun(dir.up);
-                    } else if (event.which == 39) {
-                        event.preventDefault();
-                        gameRun(dir.right);
-                    } else if (event.which == 40) {
-                        event.preventDefault();
-                        gameRun(dir.down);
-                    }
-                }
-            });
-            var touchStartClientX, touchStartClientY;
-            document.addEventListener("touchstart", function (event) {
-                if (event.touches.length > 1)
-                    return;
-                touchStartClientX = event.touches[0].clientX;
-                touchStartClientY = event.touches[0].clientY;
-            });
-            document.addEventListener("touchmove", function (event) {
-                event.preventDefault();
-            });
-            document.addEventListener("touchend", function (event) {
-                if (event.touches.length > 0)
-                    return;
-                var dx = event.changedTouches[0].clientX - touchStartClientX;
-                var absDx = Math.abs(dx);
-                var dy = event.changedTouches[0].clientY - touchStartClientY;
-                var absDy = Math.abs(dy);
-                if (Math.max(absDx, absDy) > 10) {
-                    if (absDx > absDy) {
-                        if (dx > 0) {
-                            gameRun(dir.right);
-                        } else {
-                            gameRun(dir.left);
-                        }
-                    } else {
-                        if (dy > 0) {
-                            gameRun(dir.down);
-                        } else {
-                            gameRun(dir.up);
-                        }
-                    }
-                }
-            });
-        }
-
-        /**
-         * [WARNING] This method is ugly enough for now. Waiting for refactor.
-         *
-         * Make a single game move.
-         * Takes 1 param.
-         *
-         * @param dir
-         * @returns {boolean}
-         */
-        function run(dir) {
-            var isMoved = false; //This is to indicate that if the game actually moved after calling this function
-            var i, j, k, empty, _empty, position, value1, value2, temp; //Junks
-            //Reset the matrix attr 'combined' before moving
-            for (i = 0; i < 16; i++) {
-                matrix[i].combined = false;
-            }
-            if (dir == "left") {
-                isCheating = -1;
-                for (i = 0; i < 4; i++) {
-                    empty = i * 4;
-                    _empty = empty;
-                    for (j = 0; j < 4; j++) {
-                        position = i * 4 + j;
-                        if (!matrix[position].taken) {
-                            continue;
-                        }
-                        if (matrix[position].taken && position === empty) {
-                            empty++;
-                            if (empty - 2 >= _empty) {
-                                for (k = 0; k < boxes.length; k++) {
-                                    if (boxes[k].attr("position") == position) {
-                                        break;
-                                    }
-                                }
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty - 2) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty - 2].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty - 1].taken = false;
-                                    matrix[empty - 2].combined = true;
-                                    empty--;
-                                    isMoved = true;
-                                }
-                            }
-                        } else {
-                            for (k = 0; k < boxes.length; k++) {
-                                if (boxes[k].attr("position") == position) {
-                                    break;
-                                }
-                            }
-                            boxes[k].animate({
-                                marginLeft: matrix[empty].left + 2,
-                                marginTop: matrix[empty].top + 2
-                            }, options.delay);
-                            boxes[k].attr('position', empty);
-                            matrix[empty].taken = true;
-                            matrix[position].taken = false;
-                            empty++;
-                            isMoved = true;
-                            if (empty - 2 >= _empty) {
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty - 2) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty - 2].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty - 1].taken = false;
-                                    matrix[empty - 2].combined = true;
-                                    empty--;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if (dir == "right") {
-                isCheating = -1;
-                for (i = 3; i > -1; i--) {
-                    empty = i * 4 + 3;
-                    _empty = empty;
-                    for (j = 3; j > -1; j--) {
-                        position = i * 4 + j;
-                        if (!matrix[position].taken) {
-                            continue;
-                        }
-                        if (matrix[position].taken && position === empty) {
-                            empty--;
-                            if (empty + 2 <= _empty) {
-                                for (k = 0; k < boxes.length; k++) {
-                                    if (boxes[k].attr("position") == position) {
-                                        break;
-                                    }
-                                }
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty + 2) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty + 2].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty + 1].taken = false;
-                                    matrix[empty + 2].combined = true;
-                                    empty++;
-                                    isMoved = true;
-                                }
-                            }
-                        } else {
-                            for (k = 0; k < boxes.length; k++) {
-                                if (boxes[k].attr("position") == position) {
-                                    break;
-                                }
-                            }
-                            boxes[k].animate({
-                                marginLeft: matrix[empty].left + 2,
-                                marginTop: matrix[empty].top + 2
-                            }, options.delay);
-                            boxes[k].attr('position', empty);
-                            matrix[empty].taken = true;
-                            matrix[position].taken = false;
-                            empty--;
-                            isMoved = true;
-                            if (empty + 2 <= _empty) {
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty + 2) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty + 2].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty + 1].taken = false;
-                                    matrix[empty + 2].combined = true;
-                                    empty++;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if (dir == "up") {
-                isCheating = -1;
-                for (i = 0; i < 4; i++) {
-                    empty = i;
-                    _empty = empty;
-                    for (j = 0; j < 4; j++) {
-                        position = j * 4 + i;
-                        if (!matrix[position].taken) {
-                            continue;
-                        }
-                        if (matrix[position].taken && position === empty) {
-                            empty += 4;
-                            if (empty - 8 >= _empty) {
-                                for (k = 0; k < boxes.length; k++) {
-                                    if (boxes[k].attr("position") == position) {
-                                        break;
-                                    }
-                                }
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty - 8) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty - 8].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty - 4].taken = false;
-                                    matrix[empty - 8].combined = true;
-                                    empty -= 4;
-                                    isMoved = true;
-                                }
-                            }
-                        } else {
-                            for (k = 0; k < boxes.length; k++) {
-                                if (boxes[k].attr("position") == position) {
-                                    break;
-                                }
-                            }
-                            boxes[k].animate({
-                                marginLeft: matrix[empty].left + 2,
-                                marginTop: matrix[empty].top + 2
-                            }, options.delay);
-                            boxes[k].attr('position', empty);
-                            matrix[empty].taken = true;
-                            matrix[position].taken = false;
-                            empty += 4;
-                            isMoved = true;
-                            if (empty - 8 >= _empty) {
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty - 8) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty - 8].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty - 4].taken = false;
-                                    matrix[empty - 8].combined = true;
-                                    empty -= 4;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if (dir == "down") {
-                if (isCheating != -1) {
-                    isCheating++;
-                    if (isCheating == 10) {
-                        cheat();
-                        return true;
-                    }
-                }
-                for (i = 0; i < 4; i++) {
-                    empty = i + 12;
-                    _empty = empty;
-                    for (j = 3; j > -1; j--) {
-                        position = j * 4 + i;
-                        if (!matrix[position].taken) {
-                            continue;
-                        }
-                        if (matrix[position].taken && position === empty) {
-                            empty -= 4;
-                            if (empty + 8 <= _empty) {
-                                for (k = 0; k < boxes.length; k++) {
-                                    if (boxes[k].attr("position") == position) {
-                                        break;
-                                    }
-                                }
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty + 8) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty + 8].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty + 4].taken = false;
-                                    matrix[empty + 8].combined = true;
-                                    empty += 4;
-                                    isMoved = true;
-                                }
-                            }
-                        } else {
-                            for (k = 0; k < boxes.length; k++) {
-                                if (boxes[k].attr("position") == position) {
-                                    break;
-                                }
-                            }
-                            boxes[k].animate({
-                                marginLeft: matrix[empty].left + 2,
-                                marginTop: matrix[empty].top + 2
-                            }, options.delay);
-                            boxes[k].attr('position', empty);
-                            matrix[empty].taken = true;
-                            matrix[position].taken = false;
-                            empty -= 4;
-                            isMoved = true;
-                            if (empty + 8 <= _empty) {
-                                value1 = boxes[k].attr('value');
-                                for (temp = 0; temp < boxes.length; temp++) {
-                                    if (boxes[temp].attr("position") == empty + 8) {
-                                        break;
-                                    }
-                                }
-                                value2 = boxes[temp].attr('value');
-                                if (value1 == value2 && !matrix[empty + 8].combined) {
-                                    combineBox(k, temp, value1);
-                                    matrix[empty + 4].taken = false;
-                                    matrix[empty + 8].combined = true;
-                                    empty += 4;
-                                }
-                            }
-                        }
-                    }
-                }
-
-            }
-            return isMoved;
-        }
+    },
+    //获取事件对象
+    getEvent: function (event) {
+        return event ? event : window.event;//兼容ie
     }
-})(jQuery);
+}
+function Game(tileContainer, scoreEle, bestScoreEle) {
+    this.tileContainer = tileContainer;
+    this.scoreEle = scoreEle;
+    this.bestScoreEle = bestScoreEle;
+    this.tiles = new Array(4);//创建存方块数值与dom对象的数组
+}
+Game.prototype = {
+    //初始化游戏
+    init: function () {
+        this.posArray = [];//创建存空白方块坐标的数组
+        for (var i = 0, len = this.tiles.length; i < len; i++) {
+            this.tiles[i] = [];
+            for (var j = 0; j < len; j++) {
+                this.tiles[i][j] = { num: 0 }; //初始化存方块数值与dom对象的数组
+                this.posArray.push({ "x": i, "y": j });//初始化存方块坐标的数组
+            }
+        }
+        this.deleteTile(true);//清空全部方块
+        this.score = 0;//初始化分数
+        this.bestScore = this.bestScore || 0;//初始化最佳分数，第一次为0
+        this.newTile();//随机创建一个方块
+        this.newTile();
+    },
+    //创建一个方块
+    newTile: function () {
+        var tile = document.createElement("div"),
+            pos = this.randomPos(),//随机新方块位置
+            num = Math.random() < 0.9 ? 2 : 4;//随机新方块数值2或4
+        this.tiles[pos.x][pos.y] = { num: num, tile: tile };//将新方块的数值与dom对象存入数组
+        this.setTile(tile, num, pos.x, pos.y);//设置方块属性产生移动与淡入效果
+        this.tileContainer.appendChild(tile);
+    },
+    //设置方块class和显示的数字，
+    setTile: function (element, num, x, y) {
+        element.innerHTML = num;
+        element.className = "tile tile-" + num + " tile-pos-" + x + "-" + y;
+    },
+    //随机一方块的位置
+    randomPos: function () {
+        var index = Math.floor(Math.random() * this.posArray.length);
+        var pos = this.posArray[index];
+        this.posArray.splice(index, 1);//将新方块的位置从存空白坐标的数组中删除
+        return pos;
+    },
+    //方块移动处理
+    moveTile: function (keyCode) {
+        var len = this.tiles.length,
+            merge;//存合并状态
+        switch (keyCode) {
+            //左移
+            case 37:
+                for (var i = 1; i < len; i++) {
+                    for (var j = 0; j < len; j++) {
+                        if (this.tiles[i][j].num != 0 && this.leftMove(i, j)) {//值不为0且可移动
+                            merge = this.merge(i, j);//合并
+                        }
+                    }
+                }
+                break;
+            //右移
+            case 39:
+                for (var i = len - 2; i >= 0; i--) {
+                    for (var j = 0; j < len; j++) {
+                        if (this.tiles[i][j].num != 0 && this.rightMove(i, j)) {
+                            merge = this.merge(i, j);
+                        }
+                    }
+                }
+                break;
+            //上移
+            case 38:
+                for (var i = 0; i < len; i++) {
+                    for (var j = 1; j < len; j++) {
+                        if (this.tiles[i][j].num != 0 && this.upMove(i, j)) {
+                            merge = this.merge(i, j);
+                        }
+                    }
+                }
+                break;
+            //下移
+            case 40:
+                for (var i = 0; i < len; i++) {
+                    for (var j = len - 2; j >= 0; j--) {
+                        if (this.tiles[i][j].num != 0 && this.downMove(i, j)) {
+                            merge = this.merge(i, j);
+                        }
+                    }
+                }
+                break;
+        }
+        if (merge) {
+            this.newTile();//合并之后创建一个方块  
+        } else if (this.posArray.length == 0 && this.gameOverTest()) {//当存空白位置的数组为空且没有一个方向可移动，游戏结束
+            this.gameOver();
+        }
+    },
+    //方块左移动
+    leftMove: function (i, j) {
+        this.num = this.tiles[i][j].num;
+        this.moveI = undefined;
+        this.moveJ = undefined;
+        for (var n = i - 1; n >= 0; n--) {
+            if (this.tiles[n][j].num == 0) {
+                this.moveI = n;
+            } else if (this.tiles[n][j].num == this.num) {
+                this.num *= 2;
+                this.moveI = n;
+                if (this.num == 2048) {
+                    this.gameWin();
+                }
+                this.getScore(this.num);
+                break;
+            } else {
+                break;
+            }
+        }
+        this.moveJ = j;
+        if (!(this.moveI + 1) || !(this.moveJ + 1)) {
+            return;
+        }
+        return true;
+    },
+    //方块右移动
+    rightMove: function (i, j) {
+        var len = this.tiles.length;
+        this.num = this.tiles[i][j].num;
+        this.moveI = undefined;
+        this.moveJ = undefined;
+        for (var n = i + 1; n < len; n++) {
+            if (this.tiles[n][j].num == 0) {
+                this.moveI = n;
+            } else if (this.tiles[n][j].num == this.num) {
+                this.num *= 2;
+                this.moveI = n;
+                if (this.num == 2048) {
+                    this.gameWin();
+                }
+                this.getScore(this.num);
+                break;
+            } else {
+                break;
+            }
+        }
+        this.moveJ = j;
+        if (!(this.moveI + 1) || !(this.moveJ + 1)) {
+            return;
+        }
+        return true;
+    },
+    //方块上移动
+    upMove: function (i, j) {
+        this.num = this.tiles[i][j].num;
+        this.moveI = undefined;
+        this.moveJ = undefined;
+        for (var n = j - 1; n >= 0; n--) {
+            if (this.tiles[i][n].num == 0) {
+                this.moveJ = n;
+            } else if (this.tiles[i][n].num == this.num) {
+                this.moveJ = n;
+                this.num *= 2;
+                if (this.num == 2048) {
+                    this.gameWin();
+                }
+                this.getScore(this.num);
+                break;
+            } else {
+                break;
+            }
+        }
+        this.moveI = i;
+        if (!(this.moveI + 1) || !(this.moveJ + 1)) {
+            return;
+        }
+        return true;
+    },
+    //方块下移动
+    downMove: function (i, j) {
+        var len = this.tiles.length;
+        this.num = this.tiles[i][j].num;
+        this.moveI = undefined;
+        this.moveJ = undefined;
+        for (var n = j + 1; n < len; n++) {
+            if (this.tiles[i][n].num == 0) {
+                this.moveJ = n;
+            } else if (this.tiles[i][n].num == this.num) {
+                this.moveJ = n;
+                this.num *= 2;
+                if (this.num == 2048) {
+                    this.gameWin();
+                }
+                this.getScore(this.num);
+                break;
+            } else {
+                break;
+            }
+        }
+        this.moveI = i;
+        if (!(this.moveI + 1) || !(this.moveJ + 1)) {
+            return;
+        }
+        return true;
+    },
+    //合并方块
+    merge: function (i, j) {
+        var me = this;
+        if (this.num > this.tiles[i][j].num) {
+            //this.num的值变化，即遇到相同值的方块，可移动到其位置，只需删除被覆盖的方块
+            this.deleteTile(false, this.tiles[this.moveI][this.moveJ].tile);
+            //将移到相同值的方块的位置上的方块的原始位置添加到存空白坐标的数组中
+            this.posArray.push({ x: i, y: j });
+        } else if (this.num == this.tiles[i][j].num) {
+            //值未变化，即遇到空白方块。只需将空白数组中该空白方块的坐标改为移动的方块的原始坐标
+            this.posArray.forEach(function (item) {
+                if (item.x == me.moveI && item.y == me.moveJ) {
+                    item.x = i;
+                    item.y = j;
+                }
+            });
+        }
+        //设置将移动的方块的属性，产生移动效果
+        this.setTile(this.tiles[i][j].tile, this.num, this.moveI, this.moveJ);
+        //在存方块数值与dom对象的数组中将移动的方块的值设为空白值(即num：0)，被覆盖的方块的值设为将移动的方块的值
+        this.tiles[this.moveI][this.moveJ] = { num: this.num, tile: this.tiles[i][j].tile };
+        this.tiles[i][j] = { num: 0 };
+        return true;
+    },
+    //删除dom节点
+    deleteTile: function (all, tile) {
+        if (all) {
+            this.tileContainer.innerHTML = "";//清空所有
+        } else {
+            this.tileContainer.removeChild(tile);//删除单个
+        }
+    },
+    //得分计算
+    getScore: function (score) {
+        this.score += score;
+        this.scoreEle.innerHTML = this.score;
+        if (this.score > this.bestScore) {
+            this.bestScore = this.score//当前分数大于最佳分数，覆盖最佳分数
+            this.bestScoreEle.innerHTML = this.bestScore;
+        }
+    },
+    //当出现2048即win，可继续挑战
+    gameWin: function () {
+        var me = this;
+        win = document.createElement("div"),
+            continueBtn = document.createElement("button");
+        continueBtn.className = "game-win-again";
+        win.className = "game-win";
+        win.appendChild(continueBtn);
+        this.tileContainer.appendChild(win);
+        EventUtil.addHandler(continueBtn, "click", function () {
+            me.deleteTile(false, win);
+        });
+    },
+    //游戏结束测试
+    gameOverTest: function () {
+        var len = this.tiles.length;
+        for (var i = 0; i < len; i++) {
+            for (var j = 0; j < len; j++) {
+                if (this.leftMove(i, j) || this.rightMove(i, j) || this.upMove(i, j) || this.downMove(i, j)) {
+                    return;//只要有一个方向可移动即退出
+                }
+            }
+        }
+        return true;//没有一个方向可移动即游戏结束
+    },
+    //游戏结束消息
+    gameOver: function () {
+        var message = document.createElement("div");
+        message.className = "game-over";
+        this.tileContainer.appendChild(message);
+    },
+    //添加事件处理程序
+    initEvent: function () {
+        var me = this;
+        //添加键盘弹起事件，限制一直按下重复触发
+        EventUtil.addHandler(window, "keyup", function (event) {
+            me.moveTile(EventUtil.getEvent(event).keyCode);
+        });
+    },
+    //用于移动端，判断toustart的开始坐标是否在游戏区域gameContainer内
+    touchPosTest: function (startX, startY) {
+        var container = document.getElementById("container"),
+            gameContainer = document.getElementById("game-container");
+        //container与gameContainer宽度一致，即gameContainer的offsetLeft是其已定位父元素container的offsetLeft
+        var gameContainerStartX = container.offsetLeft,
+            gameContainerStartY = container.offsetTop + gameContainer.offsetTop,
+            gameContainerEndX = gameContainerStartX + gameContainer.offsetWidth,
+            gameContainerEndY = gameContainerStartY + gameContainer.offsetHeight;
+        return (startX >= gameContainerStartX && startX <= gameContainerEndX) && (startY >= gameContainerStartY && startY <= gameContainerEndY) ? true : false;
+    },
+    //移动端滑动
+    slidMove: function (startX, startY, endX, endY) {
+        var dx = endX - startX,
+            dy = endY - startY;
+        var deg = Math.atan2(dy, dx) * 180 / Math.PI;//反正切值求滑动角度
+        if (deg >= -45 && deg <= 45) {//右
+            this.moveTile(39);
+        } else if (deg < 135 && deg > 45) {//下
+            this.moveTile(40);
+        } else if ((deg >= 135 && deg <= 180) || (deg <= -135 && deg >= -180)) {//左
+            this.moveTile(37);
+        } else if (deg > -135 && deg < -45) {//上
+            this.moveTile(38);
+        }
+    },
+};
+window.onload = function () {
+    var btn = document.getElementById("newGame"),
+        tileContainer = document.getElementById("tile-container"),
+        scoreEle = document.getElementById("game-score"),
+        bestScoreEle = document.getElementById("game-best-score"),
+        startX, startY, endX, endY;
+    var game = game || new Game(tileContainer, scoreEle, bestScoreEle);
+    game.initEvent();//初始化事件处理
+    game.init();//初始化游戏
+    EventUtil.addHandler(btn, "click", function () {
+        game.init();//newgame按钮被点击，初始化游戏，最佳分数保留直至刷新页面
+    });
+    //移动端触摸开始事件
+    EventUtil.addHandler(document, "touchstart", function (event) {
+        event.preventDefault();
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+    });
+    //移动端触摸滑动事件
+    EventUtil.addHandler(document, "touchend", function (event) {
+        event.preventDefault();
+        endX = event.changedTouches[0].clientX;
+        endY = event.changedTouches[0].clientY;
+        //只有toustart的开始坐标在游戏区域gameContainer内才出发方块四个方向滑动
+        if (game.touchPosTest(startX, startY)) {
+            game.slidMove(startX, startY, endX, endY);
+        }
+    });
+}
